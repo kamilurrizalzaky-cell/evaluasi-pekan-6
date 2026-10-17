@@ -424,3 +424,109 @@ Jawab Pertanyaan Bagian 3:
 6. Kenapa hitungKembalianPecahan memakai while di dalam for...of? Apakah bisa diganti dengan % dan /? Jelaskan.
    - Perulangan `while` dipakai untuk menghitung jumlah lembar pecahan uang secara berulang sampai habis untuk satu nominal pecahan tertentu. Bisa diganti dengan operator pembagian bulat (`Math.floor(sisa / pec)`) dan sisa bagi (`%`), yang digunakan pada implementasi di atas.
 */
+
+// ==========================================
+// BAGIAN 4: LAPORAN HARIAN
+// ==========================================
+
+const laporan = {
+    jumlahTransaksi: kasir.riwayat.length,
+    jumlahLunas: kasir.riwayat.filter(r => r.status === "LUNAS").length,
+    jumlahKurang: kasir.riwayat.filter(r => r.status === "KURANG").length,
+    jumlahDitolak: kasir.riwayat.filter(r => r.status === "DITOLAK").length,
+    pendapatan: kasir.riwayat.filter(r => r.status === "LUNAS").reduce((acc, r) => acc + r.total, 0),
+    rataRataPendapatan: 0,
+    transaksiTerbesar: null,
+    penjualanPerMenu: {},
+    menuTerlaris: "",
+    daftarDitolak: kasir.riwayat.filter(r => r.status === "DITOLAK").map(r => ({ kode: r.kode, alasan: r.alasan })),
+    kodeLunas: [],
+    ringkasanKode: "",
+    menuStokMenipis: []
+};
+
+let lunasList = kasir.riwayat.filter(r => r.status === "LUNAS");
+if (lunasList.length > 0) {
+    laporan.rataRataPendapatan = Math.round(laporan.pendapatan / lunasList.length);
+    let maxTotal = -1;
+    for (let r of lunasList) {
+        laporan.kodeLunas.push(r.kode);
+        if (r.total > maxTotal) {
+            maxTotal = r.total;
+            laporan.transaksiTerbesar = r;
+        }
+        for (let item of r.itemValid) {
+            if (item.menu in laporan.penjualanPerMenu) {
+                laporan.penjualanPerMenu[item.menu] += item.jumlah;
+            } else {
+                laporan.penjualanPerMenu[item.menu] = item.jumlah;
+            }
+        }
+    }
+}
+
+for (let i = 0; i < laporan.kodeLunas.length; i++) {
+    if (i === 0) {
+        laporan.ringkasanKode = laporan.kodeLunas[i];
+    } else {
+        laporan.ringkasanKode += ", " + laporan.kodeLunas[i];
+    }
+}
+
+let maxQty = -1;
+for (let m in laporan.penjualanPerMenu) {
+    if (laporan.penjualanPerMenu[m] > maxQty) {
+        maxQty = laporan.penjualanPerMenu[m];
+        laporan.menuTerlaris = m;
+    }
+}
+
+for (let m of menu) {
+    if (m.stok < 3) {
+        laporan.menuStokMenipis.push(m.nama);
+    }
+}
+
+console.log(`\n=== LAPORAN HARIAN ${kedai.nama.toUpperCase()} ===`);
+console.log(`Jumlah Transaksi: ${laporan.jumlahTransaksi}`);
+console.log(`Lunas: ${laporan.jumlahLunas}, Kurang: ${laporan.jumlahKurang}, Ditolak: ${laporan.jumlahDitolak}`);
+console.log(`Pendapatan: ${formatRupiah(laporan.pendapatan)}`);
+console.log(`Rata-rata Pendapatan: ${formatRupiah(laporan.rataRataPendapatan)}`);
+console.log(`Transaksi Terbesar: ${laporan.transaksiTerbesar ? laporan.transaksiTerbesar.kode : "-"}`);
+console.log(`Menu Terlaris: ${laporan.menuTerlaris}`);
+console.log(`Ringkasan Kode Lunas: ${laporan.ringkasanKode}`);
+console.log(`Menu Stok Menipis: ${laporan.menuStokMenipis.join(", ")}`);
+
+console.log("Penjualan Per Menu:");
+for (let m in laporan.penjualanPerMenu) {
+    console.log(`  - ${m}: ${laporan.penjualanPerMenu[m]} terjual`);
+}
+console.log("Object.keys(penjualanPerMenu):", Object.keys(laporan.penjualanPerMenu));
+console.log("Object.values(penjualanPerMenu):", Object.values(laporan.penjualanPerMenu));
+
+console.log("Pemeriksaan panjang ringkasanKode vs jumlahLunas:", laporan.ringkasanKode.split(", ").length === laporan.jumlahLunas);
+
+if (laporan.kodeLunas.length > 0) {
+    console.log("Demo includes:", laporan.kodeLunas.includes(laporan.kodeLunas[0]));
+    console.log("Demo indexOf:", laporan.kodeLunas.indexOf(laporan.kodeLunas[0]));
+    console.log("Demo slice (2 pertama):", laporan.kodeLunas.slice(0, 2));
+    let salinan = laporan.kodeLunas.slice();
+    let hapusPertama = salinan.splice(0, 1);
+    console.log("Splice pada salinan:", hapusPertama);
+    console.log("Salinan setelah splice:", salinan);
+    console.log("kodeLunas asli tidak berubah:", laporan.kodeLunas);
+}
+
+/*
+Jawab Pertanyaan Bagian 4:
+1. Kenapa penjualanPerMenu dibuat sebagai object, bukan array? Kenapa harus memakai bracket notation untuk mengisinya?
+   - Dibuat sebagai object agar kita bisa memetakan nama menu secara langsung sebagai kunci unik (key-value pair). Bracket notation (`laporan.penjualanPerMenu[item.menu]`) wajib dipakai karena kunci object berupa nama menu yang dinamis dan berisikan spasi.
+2. Apa beda Object.keys dan Object.values? Tunjuk hasilnya dari kodemu.
+   - Object.keys menghasilkan array yang berisi daftar nama kunci properti object, sedangkan Object.values menghasilkan array yang berisi daftar nilai dari properti object tersebut.
+3. Dari demo array method, mana yang mengubah array aslinya dan mana yang tidak? Bukti apa yang kamu lihat di console?
+   - `slice` dan `includes`/`indexOf` tidak mengubah array asli. Sedangkan `splice` mengubah array aslinya. Buktinya, saat `splice` dijalankan pada salinan array (`salinan`), array aslinya (`kodeLunas`) tetap utuh tidak berubah.
+4. Kenapa rataRata harus diubah kembali menjadi angka setelah memakai toFixed? Apa yang terjadi jika tidak diubah?
+   - toFixed mengembalikan nilai string. Jika tidak diubah kembali menjadi angka, operasi matematika selanjutnya akan gagal atau menghasilkan string concatenation.
+5. Apa hasil pengecekan jumlah kode pada nomor 4 di atas? Jelaskan kenapa hasilnya begitu.
+   - Hasilnya bernilai `true` karena jumlah item string yang dipisahkan oleh koma pada `ringkasanKode` persis sama dengan jumlah total transaksi lunas.
+*/
