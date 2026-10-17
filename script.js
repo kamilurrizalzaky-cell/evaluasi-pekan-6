@@ -127,17 +127,17 @@ const formatRupiah = (angka) => {
     let str = Math.abs(Math.floor(angka)).toString();
     let hasil = "";
     let count = 0;
-    for (let i = str.length - 1; i >= 0; i==) {
+    for (let i = str.length - 1; i >= 0; i--) {
         hasil = str[i] + hasil;
         count++;
-        if (count % 3 === 0 && i 1== 0) {
-            hasil = "." + hasil:
+        if (count % 3 === 0 && i !== 0) {
+            hasil = "." + hasil;
         }
     }
     return (angka < 0 ? "-Rp" : "Rp ") + hasil;
 };
 
-/ Uji Function minimal 3 kasus
+// Uji Function minimal 3 kasus
 console.log("--- UJI PEMBERSIH DATA ---");
 console.log(`bersihkanNama("  rina   WULANDARI ") → "${bersihkanNama("  rina   WULANDARI ")}"`);
 console.log(`bersihkanNama("") → "${bersihkanNama("")}"`);
@@ -197,3 +197,230 @@ Jawab Pertanyaan Bagian 2:
    - Arrow function (`ambilPersenVoucher`): Dipilih karena penulisannya ringkas dan sangat cocok untuk fungsi utilitas pendek satu baris.
 */
 }
+
+// ==========================================
+// BAGIAN 3: MESIN KASIR
+// ==========================================
+
+const kasir = {
+    menu: menu,
+    saldoKas: 0,
+    riwayat: [],
+    pecahan: [50000, 20000, 10000, 5000, 2000, 1000],
+
+    cariMenu(nama) {
+        for (let m of this.menu) {
+            if (m.nama.toLowerCase() === nama.toLowerCase()) {
+                return m;
+            }
+        }
+        return null;
+    },
+
+    hitungSubtotal(pesanan) {
+        let subtotal = 0;
+        let itemValid = [];
+        let itemTidakValid = [];
+
+        for (let p of pesanan) {
+            let menuObj = this.cariMenu(p.menu);
+            if (!menuObj) {
+                itemTidakValid.push({ menu: p.menu, alasan: "Menu tidak ditemukan" });
+                continue;
+            }
+            if (p.jumlah <= 0) {
+                itemTidakValid.push({ menu: p.menu, alasan: "Jumlah tidak valid" });
+                continue;
+            }
+            if (menuObj.stok < p.jumlah) {
+                itemTidakValid.push({ menu: p.menu, alasan: "Stok tidak cukup" });
+                continue;
+            }
+            let hargaItem = menuObj.harga * p.jumlah;
+            subtotal += hargaItem;
+            itemValid.push({ menu: menuObj.nama, jumlah: p.jumlah, harga: menuObj.harga });
+        }
+        return { subtotal, itemValid, itemTidakValid };
+    },
+
+    hitungPromoHari(hari) {
+        let promo = 0;
+        switch (hari) {
+            case "jumat":
+                promo = 3000;
+                break;
+            case "sabtu":
+            case "minggu":
+                promo = 5000;
+                break;
+            default:
+                promo = 0;
+                break;
+        }
+        return promo;
+    },
+
+    hitungDiskon(subtotal, persenVoucher) {
+        let persenSub = 0;
+        if (subtotal >= 100000) {
+            persenSub = 15;
+        } else if (subtotal >= 50000) {
+            persenSub = 10;
+        } else if (subtotal >= 25000) {
+            persenSub = 5;
+        } else {
+            persenSub = 0;
+        }
+        let persenFinal = Math.max(persenSub, persenVoucher);
+        let diskon = (subtotal * persenFinal) / 100;
+        return Math.round(diskon);
+    },
+
+    hitungPajak(nilai, tarif = 0.11) {
+        return Math.round(nilai * tarif);
+    },
+
+    hitungKembalianPecahan(kembalian) {
+        if (kembalian < 0) return null;
+        let hasil = { sisa: kembalian };
+        let sisa = kembalian;
+        for (let pec of this.pecahan) {
+            if (sisa >= pec) {
+                let jml = Math.floor(sisa / pec);
+                hasil[pec] = jml;
+                sisa %= pec;
+            }
+        }
+        hasil.sisa = sisa;
+        return hasil;
+    },
+
+    prosesTransaksi(trx) {
+        if (!trx.pelanggan) {
+            let res = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Nama pelanggan kosong" };
+            this.riwayat.push(res);
+            return res;
+        }
+        if (!trx.pesanan || trx.pesanan.length === 0) {
+            let res = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Pesanan kosong" };
+            this.riwayat.push(res);
+            return res;
+        }
+
+        let resSub = this.hitungSubtotal(trx.pesanan);
+        if (resSub.itemValid.length === 0) {
+            let res = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Tidak ada item valid" };
+            this.riwayat.push(res);
+            return res;
+        }
+
+        let subtotal = resSub.subtotal;
+        let promoHari = this.hitungPromoHari(trx.hari);
+        let diskon = this.hitungDiskon(subtotal, trx.persenVoucher);
+        let nilaiSetelahDiskon = subtotal - diskon - promoHari;
+        if (nilaiSetelahDiskon < 0) nilaiSetelahDiskon = 0;
+
+        let pajak = this.hitungPajak(nilaiSetelahDiskon);
+        let total = nilaiSetelahDiskon + pajak;
+        let kembalian = trx.uangBayar - total;
+        let status = trx.uangBayar >= total ? "LUNAS" : "KURANG";
+
+        let pecahanKembalian = null;
+        if (status === "LUNAS") {
+            for (let item of resSub.itemValid) {
+                let m = this.cariMenu(item.menu);
+                if (m) {
+                    m.stok -= item.jumlah;
+                }
+            }
+            this.saldoKas += total;
+            pecahanKembalian = this.hitungKembalianPecahan(kembalian);
+        }
+
+        let hasilTrx = {
+            kode: trx.kode,
+            pelanggan: trx.pelanggan,
+            status,
+            subtotal,
+            promoHari,
+            diskon,
+            pajak,
+            total,
+            uangBayar: trx.uangBayar,
+            kembalian,
+            pecahanKembalian,
+            itemValid: resSub.itemValid,
+            itemTidakValid: resSub.itemTidakValid
+        };
+
+        this.riwayat.push(hasilTrx);
+        return hasilTrx;
+    },
+
+    cetakStruk(hasil) {
+        console.log("========================================");
+        console.log(`STRUK TRANSAKSI: ${hasil.kode}`);
+        console.log(`Pelanggan: ${hasil.pelanggan}`);
+        console.log(`Status: ${hasil.status}`);
+        if (hasil.status === "DITOLAK") {
+            console.log(`Alasan: ${hasil.alasan}`);
+        } else {
+            console.log("Item Valid:");
+            hasil.itemValid.forEach((it, idx) => {
+                console.log(`  ${idx + 1}. ${it.menu} x${it.jumlah} @ ${formatRupiah(it.harga)}`);
+            });
+            if (hasil.itemTidakValid.length > 0) {
+                console.log("Item Tidak Valid:");
+                hasil.itemTidakValid.forEach(it => {
+                    console.log(`  - ${it.menu}: ${it.alasan}`);
+                });
+            }
+            console.log(`Subtotal: ${formatRupiah(hasil.subtotal)}`);
+            console.log(`Promo Hari: ${formatRupiah(hasil.promoHari)}`);
+            console.log(`Diskon: ${formatRupiah(hasil.diskon)}`);
+            console.log(`Pajak (11%): ${formatRupiah(hasil.pajak)}`);
+            console.log(`Total: ${formatRupiah(hasil.total)}`);
+            console.log(`Uang Bayar: ${formatRupiah(hasil.uangBayar)}`);
+            console.log(`Kembalian: ${formatRupiah(hasil.kembalian)}`);
+            if (hasil.pecahanKembalian && hasil.status === "LUNAS") {
+                console.log("Rincian Pecahan Kembalian:");
+                for (let key in hasil.pecahanKembalian) {
+                    if (key !== "sisa") {
+                        console.log(`  Rp ${key}: ${hasil.pecahanKembalian[key]} lembar`);
+                    }
+                }
+                if (hasil.pecahanKembalian.sisa > 0) {
+                    console.log(`  Sisa koin/lain: ${formatRupiah(hasil.pecahanKembalian.sisa)}`);
+                }
+            }
+        }
+        console.log("========================================");
+    }
+};
+
+// Menjalankan Transaksi
+let TARGET_KAS = 1000000;
+for (let trx of transaksiBersih) {
+    let res = kasir.prosesTransaksi(trx);
+    kasir.cetakStruk(res);
+    if (kasir.saldoKas >= TARGET_KAS) {
+        console.log("Target kas tercapai");
+        break;
+    }
+}
+
+/*
+Jawab Pertanyaan Bagian 3:
+1. Kenapa di dalam method kamu menulis this.menu, bukan menu? Apa yang dirujuk oleh this?
+   - this.menu merujuk pada properti menu yang berada di dalam object kasir itu sendiri. Kata `this` merepresentasikan konteks object tempat method tersebut dipanggil.
+2. Kenapa hitungPromoHari lebih cocok memakai switch? Di mana kamu sengaja tidak menulis break, dan kenapa hasilnya tetap benar?
+   - Switch cocok untuk mencocokkan satu variabel tunggal terhadap beberapa kondisi nilai yang pasti. Pada case "sabtu" dan "minggu", tidak ditulis break di antara keduanya (fall-through disengaja) agar hari Sabtu dan Minggu mengeksekusi blok potongan diskon 5000 yang sama persis secara efisien.
+3. Kenapa !trx.pesanan.length bisa dipakai untuk memeriksa pesanan kosong? Sebutkan 3 nilai yang dianggap Falsy.
+   - Properti .length bernilai 0 jika array kosong. Angka 0 di JavaScript bernilai falsy, sehingga dinegasikan dengan `!` menjadi true. Tiga nilai falsy: `false`, `0`, `""` (atau null, undefined, NaN).
+4. Tunjuk satu tempat di kodemu yang memakai break dan satu yang memakai continue. Apa beda keduanya?
+   - `break` dipakai pada target TARGET_KAS untuk menghentikan seluruh perulangan kasir sepenuhnya. `continue` dipakai pada hitungSubtotal untuk melewati item pesanan yang tidak valid dan lanjut ke item berikutnya.
+5. Kenapa hitungSubtotal mengembalikan object berisi subtotal, itemValid, dan itemTidakValid, bukan hanya angka subtotal?
+   - Agar informasi lengkap mengenai item mana saja yang sah dan item mana yang ditolak beserta alasannya dapat dicatat dan ditampilkan pada struk kasir.
+6. Kenapa hitungKembalianPecahan memakai while di dalam for...of? Apakah bisa diganti dengan % dan /? Jelaskan.
+   - Perulangan `while` dipakai untuk menghitung jumlah lembar pecahan uang secara berulang sampai habis untuk satu nominal pecahan tertentu. Bisa diganti dengan operator pembagian bulat (`Math.floor(sisa / pec)`) dan sisa bagi (`%`), yang digunakan pada implementasi di atas.
+*/
